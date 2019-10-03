@@ -29,25 +29,14 @@ class YOLOWriter:
         self.boxlist.append(bndbox)
 
     def BndBox2YoloLine(self, box, classList=[]):
-        xmin = box['xmin']
-        xmax = box['xmax']
-        ymin = box['ymin']
-        ymax = box['ymax']
+        w = self.imgSize[1]
+        h = self.imgSize[0]
 
-        xcen = float((xmin + xmax)) / 2 / self.imgSize[1]
-        ycen = float((ymin + ymax)) / 2 / self.imgSize[0]
+        # Make sure this class gets to class list
+        if box['name'] not in classList:
+            classList.append(box['name'])
 
-        w = float((xmax - xmin)) / self.imgSize[1]
-        h = float((ymax - ymin)) / self.imgSize[0]
-
-        # PR387
-        boxName = box['name']
-        if boxName not in classList:
-            classList.append(boxName)
-
-        classIndex = classList.index(boxName)
-
-        return classIndex, xcen, ycen, w, h
+        return box['name'], box['xmin'] / w, box['xmax'] / w, box['ymin'] / h, box['ymax'] /h
 
     def save(self, classList=[], targetFile=None):
 
@@ -67,9 +56,9 @@ class YOLOWriter:
 
 
         for box in self.boxlist:
-            classIndex, xcen, ycen, w, h = self.BndBox2YoloLine(box, classList)
+            classname, xmin, xmax, ymin, ymax = self.BndBox2YoloLine(box, classList)
             # print (classIndex, xcen, ycen, w, h)
-            out_file.write("%d %.6f %.6f %.6f %.6f\n" % (classIndex, xcen, ycen, w, h))
+            out_file.write("%s %.6f %.6f %.6f %.6f\n" % (classname, xmin, xmax, ymin, ymax))
 
         # print (classList)
         # print (out_class_file)
@@ -121,26 +110,33 @@ class YoloReader:
         points = [(xmin, ymin), (xmax, ymin), (xmax, ymax), (xmin, ymax)]
         self.shapes.append((label, points, None, None, difficult))
 
-    def yoloLine2Shape(self, classIndex, xcen, ycen, w, h):
-        label = self.classes[int(classIndex)]
+    def yoloLine2Shape(self, line):        
+        
+        w = self.imgSize[1]
+        h = self.imgSize[0]
 
-        xmin = max(float(xcen) - float(w) / 2, 0)
-        xmax = min(float(xcen) + float(w) / 2, 1)
-        ymin = max(float(ycen) - float(h) / 2, 0)
-        ymax = min(float(ycen) + float(h) / 2, 1)
+        parts = line.split(' ')
 
-        xmin = int(self.imgSize[1] * xmin)
-        xmax = int(self.imgSize[1] * xmax)
-        ymin = int(self.imgSize[0] * ymin)
-        ymax = int(self.imgSize[0] * ymax)
+        # Class name could contain multiple words
+        classname = ' '.join(parts[0:len(parts) - 4])
 
-        return label, xmin, ymin, xmax, ymax
+        # Make sure this class gets to class list
+        if classname not in self.classes:
+            self.classes.append(classname)
+
+        # Calculate absolute positions
+        xmin = int(float(parts[len(parts) - 4]) * w)
+        xmax = int(float(parts[len(parts) - 3]) * w)
+        ymin = int(float(parts[len(parts) - 2]) * h)
+        ymax = int(float(parts[len(parts) - 1]) * h)
+
+        return classname, xmin, ymin, xmax, ymax
 
     def parseYoloFormat(self):
         bndBoxFile = open(self.filepath, 'r')
         for bndBox in bndBoxFile:
-            classIndex, xcen, ycen, w, h = bndBox.split(' ')
-            label, xmin, ymin, xmax, ymax = self.yoloLine2Shape(classIndex, xcen, ycen, w, h)
+            
+            label, xmin, ymin, xmax, ymax = self.yoloLine2Shape(bndBox)
 
             # Caveat: difficult flag is discarded when saved as yolo format.
             self.addShape(label, xmin, ymin, xmax, ymax, False)
