@@ -29,14 +29,12 @@ class YOLOWriter:
         self.boxlist.append(bndbox)
 
     def BndBox2YoloLine(self, box, classList=[]):
-        w = self.imgSize[1]
-        h = self.imgSize[0]
 
         # Make sure this class gets to class list
         if box['name'] not in classList:
             classList.append(box['name'])
 
-        return box['name'], box['xmin'] / w, box['xmax'] / w, box['ymin'] / h, box['ymax'] /h
+        return box['name'], box['xmin'], box['ymin'], box['xmax'], box['ymax']
 
     def save(self, classList=[], targetFile=None):
 
@@ -56,9 +54,9 @@ class YOLOWriter:
 
 
         for box in self.boxlist:
-            classname, xmin, xmax, ymin, ymax = self.BndBox2YoloLine(box, classList)
+            classname, xmin, ymin, xmax, ymax = self.BndBox2YoloLine(box, classList)
             # print (classIndex, xcen, ycen, w, h)
-            out_file.write("%s %.6f %.6f %.6f %.6f\n" % (classname, xmin, xmax, ymin, ymax))
+            out_file.write("%s %d %d %d %d\n" % (classname, xmin, ymin, xmax, ymax))
 
         # print (classList)
         # print (out_class_file)
@@ -76,6 +74,7 @@ class YoloReader:
         # shapes type:
         # [labbel, [(x1,y1), (x2,y2), (x3,y3), (x4,y4)], color, color, difficult]
         self.shapes = []
+        self.classes = []
         self.filepath = filepath
 
         if classListPath is None:
@@ -86,8 +85,9 @@ class YoloReader:
 
         # print (filepath, self.classListPath)
 
-        classesFile = open(self.classListPath, 'r')
-        self.classes = classesFile.read().strip('\n').split('\n')
+        if os.path.exists(self.classListPath):
+            classesFile = open(self.classListPath, 'r')
+            self.classes = classesFile.read().strip('\n').split('\n')
 
         # print (self.classes)
 
@@ -110,10 +110,7 @@ class YoloReader:
         points = [(xmin, ymin), (xmax, ymin), (xmax, ymax), (xmin, ymax)]
         self.shapes.append((label, points, None, None, difficult))
 
-    def yoloLine2Shape(self, line):        
-        
-        w = self.imgSize[1]
-        h = self.imgSize[0]
+    def yoloLine2Shape(self, line):
 
         parts = line.split(' ')
 
@@ -125,10 +122,10 @@ class YoloReader:
             self.classes.append(classname)
 
         # Calculate absolute positions
-        xmin = int(float(parts[len(parts) - 4]) * w)
-        xmax = int(float(parts[len(parts) - 3]) * w)
-        ymin = int(float(parts[len(parts) - 2]) * h)
-        ymax = int(float(parts[len(parts) - 1]) * h)
+        xmin = int(round(float(parts[len(parts) - 4])))
+        ymin = int(round(float(parts[len(parts) - 3])))
+        xmax = int(round(float(parts[len(parts) - 2])))
+        ymax = int(round(float(parts[len(parts) - 1])))
 
         return classname, xmin, ymin, xmax, ymax
 
